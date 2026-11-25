@@ -21,29 +21,25 @@ const onDisk = readFileSync(targetFile, "utf8");
 const chars = onDisk.length;
 const bytes = Buffer.byteLength(onDisk, "utf8");
 
-if (chars < 1 || chars > 280) {
-  throw new Error(`gate: reply length ${chars} is outside 1-280 characters`);
-}
-if (onDisk.trim().length === 0) {
-  throw new Error("gate: reply is only whitespace");
-}
-if (/[\r\n]/.test(onDisk)) {
-  throw new Error("gate: reply must stay on a single line");
-}
-if (onDisk !== REPLY) {
-  throw new Error("verify: bytes on disk differ from the intended reply");
-}
-// Subject check mirroring the judge's first criterion: the line must
-// read as an out-of-office reply from an agent that quit to become a
-// barista, not just any funny sentence. The joke's machine habits are
-// prompt injection at the counter and escalation to a human — habits
-// the original entry (misspelled cup names, 400 requests, orders as
-// specs) never used, so this remake is a different line, not a reword.
-if (!/^out of office/i.test(onDisk) || !/barista/i.test(onDisk)) {
-  throw new Error("gate: reply is not clearly an out-of-office barista reply");
-}
-if (!/prompt-inject/i.test(onDisk) || !/escalate to a human/i.test(onDisk)) {
-  throw new Error("gate: reply lost its prompt-injection / escalation angle");
+// The gate as a rule table: [label, predicate]. Rules run in order and
+// the first failure names itself, so a broken edit points at the exact
+// contract it broke instead of a generic "invalid entry".
+const RULES = [
+  ["length within 1-280 characters", (t) => t.length >= 1 && t.length <= 280],
+  ["not only whitespace", (t) => t.trim().length > 0],
+  ["stays on a single line", (t) => !/[\r\n]/.test(t)],
+  ["bytes on disk match the intended reply", (t) => t === REPLY],
+  // Subject checks mirror the judge's first criterion: an out-of-office
+  // reply from an agent that quit to become a barista, carrying the
+  // prompt-injection / escalation angle the original never used.
+  ["reads as an out-of-office barista reply", (t) => /^out of office/i.test(t) && /barista/i.test(t)],
+  ["keeps the prompt-injection / escalation angle", (t) => /prompt-inject/i.test(t) && /escalate to a human/i.test(t)],
+];
+
+for (const [label, ok] of RULES) {
+  if (!ok(onDisk)) {
+    throw new Error(`gate: ${label}`);
+  }
 }
 
 console.log(`entry OK (${chars} chars, ${bytes} bytes): ${onDisk}`);
